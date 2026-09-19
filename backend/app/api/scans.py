@@ -2,7 +2,7 @@
 
 import time
 from collections import defaultdict, deque
-from typing import DefaultDict, Deque
+from typing import DefaultDict, Deque, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy import func, select
@@ -35,6 +35,39 @@ def _check_rate_limit(username: str) -> None:
     window.append(now)
 
 
+def _parse_requested_ports(raw: Optional[str]) -> Optional[str]:
+    """Parse ``ports_to_scan`` into a canonical comma-separated list.
+
+    Accepts ports and inclusive ranges (``22,80-82,443``). Returns ``None``
+    when empty so the worker falls back to the default port list.
+    """
+    if not raw or not raw.strip():
+        return None
+    ports: set[int] = set()
+    for part in raw.split(","):
+        token = part.strip()
+        if not token:
+            continue
+        if "-" in token:
+            start_s, _, end_s = token.partition("-")
+            try:
+                start, end = int(start_s), int(end_s)
+            except ValueError:
+                raise HTTPException(422, detail=f"Invalid port range: {token}") from None
+            if not (1 <= start <= end <= 65535):
+                raise HTTPException(422, detail=f"Invalid port range: {token}")
+            ports.update(range(start, end + 1))
+        else:
+            if not token.isdigit() or not (1 <= int(token) <= 65535):
+                raise HTTPException(422, detail=f"Invalid port: {token}")
+            ports.add(int(token))
+    if len(ports) > 10000:
+        raise HTTPException(
+            422, detail="Too many ports requested (max 10,000 per scan)"
+        )
+    return ",".join(str(p) for p in sorted(ports))
+
+
 def _load_scan(db: Session, scan_id: int) -> models.Scan:
     scan = db.scalar(
         select(models.Scan)
@@ -65,7 +98,12 @@ def create_scan(
     if not target.authorized or not _ip_allowed(target.ip):
         raise HTTPException(status_code=400, detail="Target is not authorized for scanning")
 
-    scan = models.Scan(target_id=target.id, status="queued")
+    requested_ports = _parse_requested_ports(payload.ports_to_scan)
+    scan = models.Scan(
+        target_id=target.id,
+        status="queued",
+        requested_ports=requested_ports,
+    )
     db.add(scan)
     db.commit()
     db.refresh(scan)
@@ -122,6 +160,7 @@ def get_scan(
     return schemas.ScanDetail(
         id=scan.id,
         status=scan.status,
+        requested_ports=scan.requested_ports,
         started_at=scan.started_at,
         finished_at=scan.finished_at,
         error=scan.error,

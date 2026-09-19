@@ -44,6 +44,11 @@ class TargetPage(BaseModel):
 # --- Scan ---
 class ScanCreate(BaseModel):
     target_id: int
+    ports_to_scan: Optional[str] = Field(
+        default=None,
+        description="Optional comma-separated ports or ranges (e.g. '22,80-82,443'). "
+        "Defaults to the built-in port list when omitted.",
+    )
 
 
 class ScanOut(BaseModel):
@@ -52,6 +57,7 @@ class ScanOut(BaseModel):
     id: int
     target_id: int
     status: str
+    requested_ports: Optional[str] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     error: Optional[str] = None
@@ -107,6 +113,7 @@ class FindingOut(BaseModel):
 class ScanDetail(BaseModel):
     id: int
     status: str
+    requested_ports: Optional[str] = None
     started_at: Optional[datetime] = None
     finished_at: Optional[datetime] = None
     error: Optional[str] = None

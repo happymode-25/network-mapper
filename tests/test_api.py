@@ -104,6 +104,29 @@ class TestAPI:
         assert detail.json()["status"] in ("queued", "running", "completed")
         assert detail.json()["target"]["ip"] == ALLOWED_IP
 
+    def test_create_scan_with_requested_ports(self, client, auth_headers):
+        target = client.post("/api/targets", json={"ip": ALLOWED_IP}, headers=auth_headers).json()
+        scan = client.post(
+            "/api/scans",
+            json={"target_id": target["id"], "ports_to_scan": "22, 80-82,443"},
+            headers=auth_headers,
+        )
+        assert scan.status_code == 201
+        body = scan.json()
+        assert body["requested_ports"] == "22,80,81,82,443"
+        detail = client.get(f"/api/scans/{body['id']}", headers=auth_headers).json()
+        assert detail["requested_ports"] == "22,80,81,82,443"
+
+    def test_create_scan_rejects_invalid_ports(self, client, auth_headers):
+        target = client.post("/api/targets", json={"ip": ALLOWED_IP}, headers=auth_headers).json()
+        for bad in ("99999", "22,abc", "80-5", "0,80", "22-20000"):
+            resp = client.post(
+                "/api/scans",
+                json={"target_id": target["id"], "ports_to_scan": bad},
+                headers=auth_headers,
+            )
+            assert resp.status_code == 422, bad
+
     def test_scan_for_unauthorized_target_rejected(self, client, auth_headers):
         target = client.post(
             "/api/targets", json={"ip": DISALLOWED_IP}, headers=auth_headers
@@ -177,6 +200,26 @@ class TestScanService:
         assert any(f.severity == "critical" for f in findings)
         # nginx/CVE-2021-23017 should also match
         assert any("CVE-2021-23017" in f.cve_id for f in findings)
+
+    def test_execute_scan_uses_requested_ports(self, db, monkeypatch):
+        from backend.app.scan_service import execute_scan
+
+        target = models.Target(ip=ALLOWED_IP, hostname="local", authorized=True)
+        db.add(target)
+        db.commit()
+        scan = models.Scan(target_id=target.id, status="queued", requested_ports="22,443,80")
+        db.add(scan)
+        db.commit()
+
+        captured: dict = {}
+
+        async def fake_scan(host, ports, **kwargs):
+            captured["ports"] = list(ports)
+            return _fake_services(host)
+
+        monkeypatch.setattr("scanner.scanner.scan_host_with_services", fake_scan)
+        execute_scan(db, scan.id)
+        assert captured["ports"] == [22, 80, 443]  # deduplicated, sorted
 
     def test_execute_scan_disallowed_target_fails(self, db):
         from backend.app.scan_service import execute_scan

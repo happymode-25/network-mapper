@@ -7,6 +7,7 @@ import { formatTime } from '../theme'
 
 export default function Scans() {
   const [targetId, setTargetId] = useState('')
+  const [ports, setPorts] = useState('')
   const [error, setError] = useState('')
   const queryClient = useQueryClient()
 
@@ -14,10 +15,11 @@ export default function Scans() {
   const targetsQ = useQuery({ queryKey: ['targets'], queryFn: () => api.get('/targets?size=100').then((r) => r.data) })
 
   const startScan = useMutation({
-    mutationFn: () => api.post('/scans', { target_id: Number(targetId) }),
+    mutationFn: () => api.post('/scans', { target_id: Number(targetId), ports_to_scan: ports.trim() || null }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['scans'] })
       setTargetId('')
+      setPorts('')
       setError('')
     },
     onError: (err) => setError(apiErrorMessage(err, 'Failed to start scan')),
@@ -43,6 +45,15 @@ export default function Scans() {
             ))}
           </select>
         </div>
+        <div>
+          <label className="block text-xs text-slate-400 mb-1">Ports (optional)</label>
+          <input
+            className="rounded border border-slate-700 bg-slate-800 px-3 py-2 text-sm w-56"
+            placeholder="e.g. 22,80-82,443"
+            value={ports}
+            onChange={(e) => setPorts(e.target.value)}
+          />
+        </div>
         <button
           onClick={() => startScan.mutate()}
           disabled={!targetId || startScan.isPending}
@@ -59,6 +70,7 @@ export default function Scans() {
             <tr>
               <th className="pb-2">ID</th>
               <th className="pb-2">Target</th>
+              <th className="pb-2">Ports</th>
               <th className="pb-2">Status</th>
               <th className="pb-2">Started</th>
               <th className="pb-2">Finished</th>
@@ -70,6 +82,7 @@ export default function Scans() {
               <tr key={s.id}>
                 <td className="py-2 font-mono">{s.id}</td>
                 <td className="py-2">{s.target_id}</td>
+                <td className="py-2 text-xs text-slate-400">{s.requested_ports || 'default'}</td>
                 <td className="py-2"><StatusBadge status={s.status} /></td>
                 <td className="py-2">{formatTime(s.started_at)}</td>
                 <td className="py-2">{formatTime(s.finished_at)}</td>

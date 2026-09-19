@@ -64,6 +64,22 @@ def _suggest_ports(target: Target) -> list[int]:
     return ports[: settings.MAX_PORTS_PER_SCAN]
 
 
+def _resolve_scan_ports(scan: Scan, target: Target) -> list[int]:
+    """Return the ports to probe: the scan's requested ports or the defaults."""
+    if scan.requested_ports:
+        try:
+            ports = [
+                int(token)
+                for token in scan.requested_ports.split(",")
+                if token.strip().isdigit()
+            ]
+        except ValueError:  # pragma: no cover - validated at creation time
+            ports = []
+        if ports:
+            return sorted(set(ports))
+    return _suggest_ports(target)
+
+
 async def _persist_services(
     db: Session, scan: Scan, services: list[dict], asset_importance: str
 ) -> None:
@@ -164,7 +180,7 @@ async def _live_candidates(svc: dict) -> list[dict]:
 
 
 async def _scan_async(db: Session, scan: Scan, target: Target) -> None:
-    ports = _suggest_ports(target)
+    ports = _resolve_scan_ports(scan, target)
     services = await scanner.scan_host_with_services(
         target.ip,
         ports,

@@ -52,6 +52,9 @@ class Scan(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     target_id: Mapped[int] = mapped_column(ForeignKey("targets.id", ondelete="CASCADE"))
     status: Mapped[str] = mapped_column(String(20), default="queued", index=True)
+    requested_ports: Mapped[Optional[str]] = mapped_column(
+        String(4096), nullable=True, default=None
+    )
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
