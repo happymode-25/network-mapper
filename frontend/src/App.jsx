@@ -1,8 +1,6 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { AuthProvider, RequireAuth } from './auth'
-import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Scans from './pages/Scans'
 import ScanDetail from './pages/ScanDetail'
@@ -20,18 +18,15 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route path="/" element={<RequireAuth><Dashboard /></RequireAuth>} />
-            <Route path="/scans" element={<RequireAuth><Scans /></RequireAuth>} />
-            <Route path="/scans/:id" element={<RequireAuth><ScanDetail /></RequireAuth>} />
-            <Route path="/compare" element={<RequireAuth><Compare /></RequireAuth>} />
-            <Route path="/targets" element={<RequireAuth><Targets /></RequireAuth>} />
-            <Route path="/assets" element={<RequireAuth><Assets /></RequireAuth>} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AuthProvider>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/scans" element={<Scans />} />
+          <Route path="/scans/:id" element={<ScanDetail />} />
+          <Route path="/compare" element={<Compare />} />
+          <Route path="/targets" element={<Targets />} />
+          <Route path="/assets" element={<Assets />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
       </BrowserRouter>
     </QueryClientProvider>
   )

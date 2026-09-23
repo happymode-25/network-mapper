@@ -5,13 +5,7 @@ from sqlalchemy import select
 
 from backend.app import models
 from backend.app.database import SessionLocal
-from backend.app.security import (
-    create_access_token,
-    decode_access_token,
-    hash_password,
-    is_allowed,
-    verify_password,
-)
+from backend.app.security import is_allowed
 
 ALLOWED_IP = "127.0.0.1"
 DISALLOWED_IP = "198.51.100.7"  # TEST-NET-2, not on the test allowlist
@@ -37,116 +31,81 @@ class TestAllowlist:
         assert not is_allowed("999.999.999.999")
 
 
-class TestTokens:
-    def test_create_and_decode(self):
-        token = create_access_token("admin")
-        assert decode_access_token(token) == "admin"
-
-    def test_decode_garbage(self):
-        assert decode_access_token("nope.invalid.token") is None
-
-    def test_password_hashing(self):
-        hashed = hash_password("secret")
-        assert verify_password("secret", hashed)
-        assert not verify_password("wrong", hashed)
-
-
 class TestAPI:
     def test_health(self, client):
         resp = client.get("/health")
         assert resp.status_code == 200
         assert resp.json()["status"] == "ok"
 
-    def test_protected_route_requires_auth(self, client):
-        resp = client.get("/api/targets")
-        assert resp.status_code == 401
-
-    def test_login_and_me(self, client):
-        resp = client.post("/api/token", data={"username": "admin", "password": "admin"})
-        assert resp.status_code == 200
-        token = resp.json()["access_token"]
-        me = client.get("/api/me", headers={"Authorization": f"Bearer {token}"})
-        assert me.json()["username"] == "admin"
-
-    def test_login_rejects_bad_credentials(self, client):
-        resp = client.post("/api/token", data={"username": "admin", "password": "wrong"})
-        assert resp.status_code == 401
-
-    def test_create_allowed_target(self, client, auth_headers):
-        resp = client.post("/api/targets", json={"ip": ALLOWED_IP, "hostname": "local"}, headers=auth_headers)
+    def test_create_allowed_target(self, client):
+        resp = client.post("/api/targets", json={"ip": ALLOWED_IP, "hostname": "local"})
         assert resp.status_code == 201
         assert resp.json()["authorized"] is True
         assert resp.json()["ip"] == ALLOWED_IP
 
-    def test_create_disallowed_target_rejected(self, client, auth_headers):
-        resp = client.post("/api/targets", json={"ip": DISALLOWED_IP}, headers=auth_headers)
+    def test_create_disallowed_target_rejected(self, client):
+        resp = client.post("/api/targets", json={"ip": DISALLOWED_IP})
         assert resp.status_code == 400
         assert "not on the allowed targets list" in resp.json()["detail"]
 
-    def test_create_invalid_ip_rejected(self, client, auth_headers):
-        resp = client.post("/api/targets", json={"ip": "banana"}, headers=auth_headers)
+    def test_create_invalid_ip_rejected(self, client):
+        resp = client.post("/api/targets", json={"ip": "banana"})
         assert resp.status_code == 422
 
-    def test_list_targets_paginated(self, client, auth_headers):
-        client.post("/api/targets", json={"ip": ALLOWED_IP}, headers=auth_headers)
-        resp = client.get("/api/targets?page=1&size=5", headers=auth_headers)
+    def test_list_targets_paginated(self, client):
+        client.post("/api/targets", json={"ip": ALLOWED_IP})
+        resp = client.get("/api/targets?page=1&size=5")
         assert resp.status_code == 200
         assert resp.json()["total"] >= 1
         assert len(resp.json()["items"]) >= 1
 
-    def test_create_scan_and_get_details(self, client, auth_headers):
-        target = client.post("/api/targets", json={"ip": ALLOWED_IP}, headers=auth_headers).json()
-        scan = client.post("/api/scans", json={"target_id": target["id"]}, headers=auth_headers)
+    def test_create_scan_and_get_details(self, client):
+        target = client.post("/api/targets", json={"ip": ALLOWED_IP}).json()
+        scan = client.post("/api/scans", json={"target_id": target["id"]})
         assert scan.status_code == 201
         scan_id = scan.json()["id"]
-        detail = client.get(f"/api/scans/{scan_id}", headers=auth_headers)
+        detail = client.get(f"/api/scans/{scan_id}")
         assert detail.status_code == 200
         assert detail.json()["status"] in ("queued", "running", "completed")
         assert detail.json()["target"]["ip"] == ALLOWED_IP
 
-    def test_create_scan_with_requested_ports(self, client, auth_headers):
-        target = client.post("/api/targets", json={"ip": ALLOWED_IP}, headers=auth_headers).json()
+    def test_create_scan_with_requested_ports(self, client):
+        target = client.post("/api/targets", json={"ip": ALLOWED_IP}).json()
         scan = client.post(
             "/api/scans",
             json={"target_id": target["id"], "ports_to_scan": "22, 80-82,443"},
-            headers=auth_headers,
         )
         assert scan.status_code == 201
         body = scan.json()
         assert body["requested_ports"] == "22,80,81,82,443"
-        detail = client.get(f"/api/scans/{body['id']}", headers=auth_headers).json()
+        detail = client.get(f"/api/scans/{body['id']}").json()
         assert detail["requested_ports"] == "22,80,81,82,443"
 
-    def test_create_scan_rejects_invalid_ports(self, client, auth_headers):
-        target = client.post("/api/targets", json={"ip": ALLOWED_IP}, headers=auth_headers).json()
+    def test_create_scan_rejects_invalid_ports(self, client):
+        target = client.post("/api/targets", json={"ip": ALLOWED_IP}).json()
         for bad in ("99999", "22,abc", "80-5", "0,80", "22-20000"):
             resp = client.post(
                 "/api/scans",
                 json={"target_id": target["id"], "ports_to_scan": bad},
-                headers=auth_headers,
             )
             assert resp.status_code == 422, bad
 
-    def test_scan_for_unauthorized_target_rejected(self, client, auth_headers):
-        target = client.post(
-            "/api/targets", json={"ip": DISALLOWED_IP}, headers=auth_headers
-        )
+    def test_scan_for_unauthorized_target_rejected(self, client):
+        target = client.post("/api/targets", json={"ip": DISALLOWED_IP})
         assert target.status_code == 400
 
-    def test_get_missing_scan_404(self, client, auth_headers):
-        assert client.get("/api/scans/9999", headers=auth_headers).status_code == 404
+    def test_get_missing_scan_404(self, client):
+        assert client.get("/api/scans/9999").status_code == 404
 
-    def test_assets_crud(self, client, auth_headers):
+    def test_assets_crud(self, client):
         created = client.post(
             "/api/assets",
             json={"ip": ALLOWED_IP, "hostname": "box", "importance": "high"},
-            headers=auth_headers,
         )
         assert created.status_code == 201
         updated = client.put(
             f"/api/assets/{created.json()['id']}",
             json={"importance": "critical"},
-            headers=auth_headers,
         )
         assert updated.json()["importance"] == "critical"
 
@@ -240,7 +199,7 @@ class TestScanService:
         with pytest.raises(ValueError):
             execute_scan(db, 987654)
 
-    def test_findings_endpoint_reports_scan_results(self, db, client, auth_headers, monkeypatch):
+    def test_findings_endpoint_reports_scan_results(self, db, client, monkeypatch):
         import backend.app.scan_service as svc
 
         target = models.Target(ip=ALLOWED_IP, hostname="local", authorized=True)
@@ -256,7 +215,7 @@ class TestScanService:
         monkeypatch.setattr("scanner.scanner.scan_host_with_services", fake_scan)
         svc.execute_scan(db, scan.id)
 
-        resp = client.get(f"/api/scans/{scan.id}/findings", headers=auth_headers)
+        resp = client.get(f"/api/scans/{scan.id}/findings")
         assert resp.status_code == 200
         assert resp.json()["total"] >= 1
         first = resp.json()["items"][0]

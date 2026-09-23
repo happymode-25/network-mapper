@@ -24,12 +24,6 @@ class Settings(BaseSettings):
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
 
-    # Authentication
-    SECRET_KEY: str = "change-me"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    DEFAULT_ADMIN_USERNAME: str = "admin"
-    DEFAULT_ADMIN_PASSWORD: str = "admin"
-
     # Scanning
     ALLOWED_TARGETS: str = "127.0.0.1, 10.0.0.0/8, 192.168.0.0/16"
     SCAN_CONCURRENCY: int = 50

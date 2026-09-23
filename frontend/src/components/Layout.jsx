@@ -1,6 +1,5 @@
 import React from 'react'
-import { NavLink, useNavigate } from 'react-router-dom'
-import { logout } from '../api'
+import { NavLink } from 'react-router-dom'
 import { severityColor } from '../theme'
 
 const navItems = [
@@ -12,7 +11,6 @@ const navItems = [
 ]
 
 export default function Layout({ children }) {
-  const navigate = useNavigate()
   return (
     <div className="min-h-screen flex">
       <aside className="w-56 shrink-0 bg-slate-900 border-r border-slate-800 p-4 flex flex-col gap-1">
@@ -34,17 +32,8 @@ export default function Layout({ children }) {
             {item.label}
           </NavLink>
         ))}
-        <div className="mt-auto flex items-center justify-between">
-          <span className="text-xs text-slate-500">admin</span>
-          <button
-            onClick={() => {
-              logout()
-              navigate('/login')
-            }}
-            className="text-xs text-slate-400 hover:text-white"
-          >
-            Sign out
-          </button>
+        <div className="mt-auto">
+          <span className="text-xs text-slate-500">Live demo — open access, no login</span>
         </div>
       </aside>
       <main className="flex-1 p-6 overflow-auto">{children}</main>

@@ -13,18 +13,18 @@ from ..config import get_settings
 from ..database import get_db
 from ..security import log_audit
 from ..tasks import enqueue_scan
-from .deps import get_current_user
 
 router = APIRouter(prefix="/api", tags=["scans"])
 settings = get_settings()
 
-# Per-user sliding-window rate limiter: username -> deque of scan timestamps.
+# Sliding-window rate limiter: the demo is open-access, so all requests share
+# a single "guest" bucket.
 _scan_times: DefaultDict[str, Deque[float]] = defaultdict(deque)
 
 
-def _check_rate_limit(username: str) -> None:
+def _check_rate_limit() -> None:
     now = time.time()
-    window: Deque[float] = _scan_times[username]
+    window: Deque[float] = _scan_times["guest"]
     while window and now - window[0] > 60:
         window.popleft()
     if len(window) >= settings.RATE_LIMIT_SCANS_PER_MINUTE:
@@ -88,10 +88,9 @@ def create_scan(
     payload: schemas.ScanCreate,
     response: Response,
     db: Session = Depends(get_db),
-    username: str = Depends(get_current_user),
 ):
     """Queue a scan for an authorized target."""
-    _check_rate_limit(username)
+    _check_rate_limit()
     target = db.get(models.Target, payload.target_id)
     if target is None:
         raise HTTPException(status_code=404, detail="Target not found")
@@ -110,14 +109,14 @@ def create_scan(
 
     try:
         enqueue_scan(scan.id)
-        log_audit(username, "scan.create", target=target.ip, status="ok")
+        log_audit("guest", "scan.create", target=target.ip, status="ok")
         response.status_code = status.HTTP_201_CREATED
     except Exception as exc:  # pragma: no cover - broker may be down in dev/test
         scan.status = "failed"
         scan.error = f"Failed to enqueue: {exc}"
         db.add(scan)
         db.commit()
-        log_audit(username, "scan.create", target=target.ip, status="failed", details=str(exc))
+        log_audit("guest", "scan.create", target=target.ip, status="failed", details=str(exc))
         raise HTTPException(status_code=503, detail=f"Could not enqueue scan: {exc}") from exc
 
     return scan
@@ -134,7 +133,6 @@ def list_scans(
     page: int = 1,
     size: int = 20,
     db: Session = Depends(get_db),
-    username: str = Depends(get_current_user),
 ):
     """List scans with pagination."""
     page = max(1, page)
@@ -153,7 +151,6 @@ def list_scans(
 def get_scan(
     scan_id: int,
     db: Session = Depends(get_db),
-    username: str = Depends(get_current_user),
 ):
     """Return a scan with its target, ports, services and findings."""
     scan = _load_scan(db, scan_id)
@@ -177,7 +174,6 @@ def get_findings(
     size: int = 50,
     severity: str | None = None,
     db: Session = Depends(get_db),
-    username: str = Depends(get_current_user),
 ):
     """List findings for a scan, optionally filtered by severity."""
     page = max(1, page)
@@ -199,7 +195,6 @@ def export_scan(
     scan_id: int,
     format: str = Query("json", pattern="^(json|csv|stix)$"),
     db: Session = Depends(get_db),
-    username: str = Depends(get_current_user),
 ):
     """Export a scan's findings as JSON, CSV, or a STIX 2.1 bundle."""
     scan = _load_scan(db, scan_id)
@@ -218,7 +213,7 @@ def export_scan(
         media_type = "application/json"
         filename = f"scan-{scan_id}.json"
 
-    log_audit(username, "scan.export", target=scan.target.ip, status="ok", details=f"format={format}")
+    log_audit("guest", "scan.export", target=scan.target.ip, status="ok", details=f"format={format}")
     return Response(
         content=content,
         media_type=media_type,
@@ -243,7 +238,6 @@ def compare_scans(
     scan_a: int,
     scan_b: int,
     db: Session = Depends(get_db),
-    username: str = Depends(get_current_user),
 ):
     """Diff the findings of two scans: added / removed / changed."""
     scan_a_row = _load_scan(db, scan_a)

@@ -96,22 +96,22 @@ def test_to_stix_bundle_structure(db, completed_scan):
     assert "CVE-2024-6387" in ext_ids
 
 
-def test_export_endpoint_formats(db, client, auth_headers, completed_scan):
+def test_export_endpoint_formats(db, client, completed_scan):
     scan_id = completed_scan.id
 
-    resp = client.get(f"/api/scans/{scan_id}/export?format=json", headers=auth_headers)
+    resp = client.get(f"/api/scans/{scan_id}/export?format=json")
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("application/json")
     assert resp.json()["scan"]["id"] == scan_id
 
-    resp = client.get(f"/api/scans/{scan_id}/export?format=csv", headers=auth_headers)
+    resp = client.get(f"/api/scans/{scan_id}/export?format=csv")
     assert resp.status_code == 200
     assert resp.headers["content-type"].startswith("text/csv")
     assert "cve_id" in resp.text.splitlines()[0]
 
-    resp = client.get(f"/api/scans/{scan_id}/export?format=stix", headers=auth_headers)
+    resp = client.get(f"/api/scans/{scan_id}/export?format=stix")
     assert resp.status_code == 200
     assert resp.json()["type"] == "bundle"
 
-    bad = client.get(f"/api/scans/{scan_id}/export?format=pdf", headers=auth_headers)
+    bad = client.get(f"/api/scans/{scan_id}/export?format=pdf")
     assert bad.status_code == 422

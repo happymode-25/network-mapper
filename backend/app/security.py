@@ -1,14 +1,15 @@
-"""Security helpers: target allowlist, JWT, password hashing, audit logging."""
+"""Security helpers: target allowlist and audit logging.
+
+The hosted demo runs without a login screen, so JWT/credential code is not
+included here. Authentication can be re-enabled by restoring the auth router
+and the JWT helpers from the project history.
+"""
 
 import ipaddress
 import json
 import logging
-import secrets
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
-
-from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 from .config import get_settings
 from .database import SessionLocal
@@ -29,47 +30,6 @@ BLOCKED_RANGES = [
     ipaddress.ip_network("::/128"),
     ipaddress.ip_network("ff00::/8"),
 ]
-
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-ALGORITHM = "HS256"
-
-
-def hash_password(password: str) -> str:
-    """Hash a password with bcrypt."""
-    return _pwd_context.hash(password)
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    """Verify a plaintext password against a bcrypt hash."""
-    return _pwd_context.verify(plain, hashed)
-
-
-def create_access_token(
-    subject: str, expires_delta: Optional[timedelta] = None
-) -> str:
-    """Create a signed JWT for the given username (subject)."""
-    expire = datetime.utcnow() + (
-        expires_delta or timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    )
-    payload = {"sub": subject, "iat": datetime.utcnow(), "exp": expire}
-    return jwt.encode(payload, settings.SECRET_KEY, algorithm=ALGORITHM)
-
-
-def decode_access_token(token: str) -> Optional[str]:
-    """Decode a JWT and return the subject (username) or None on failure."""
-    try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[ALGORITHM])
-        return payload.get("sub")
-    except JWTError:
-        return None
-
-
-def authenticate(username: str, password: str) -> bool:
-    """Validate the default (env-configured) admin credential pair."""
-    return secrets.compare_digest(
-        username, settings.DEFAULT_ADMIN_USERNAME
-    ) and secrets.compare_digest(password, settings.DEFAULT_ADMIN_PASSWORD)
 
 
 def is_allowed(ip: str) -> bool:

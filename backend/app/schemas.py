@@ -6,16 +6,6 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field
 
 
-# --- Auth ---
-class Token(BaseModel):
-    access_token: str
-    token_type: str = "bearer"
-
-
-class User(BaseModel):
-    username: str
-
-
 # --- Target ---
 class TargetBase(BaseModel):
     ip: str = Field(..., description="IP address or wildcard to verify")

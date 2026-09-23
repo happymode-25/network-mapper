@@ -85,7 +85,8 @@ docker compose exec backend python -m backend.app.seed
 
 - Dashboard: http://localhost:3000
 - API / OpenAPI docs: http://localhost:8000/docs
-- Default login: `admin` / `admin` (set `DEFAULT_ADMIN_USERNAME`/`DEFAULT_ADMIN_PASSWORD` in `.env`)
+
+The app opens directly — there is no login screen.
 
 The backend container runs `alembic upgrade head` on startup, so migrations are
 applied automatically.
@@ -109,7 +110,7 @@ $env:SECRET_KEY="dev-key"; $env:ALLOWED_TARGETS="127.0.0.1, 192.168.0.0/16, 172.
 uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Then open http://127.0.0.1:8000/docs, log in (`admin` / `admin`), add a target
+Then open http://127.0.0.1:8000/docs (no login needed), add a target
 in your allowlist, and run a scan — it executes synchronously and results are
 saved immediately. Point `ALLOWED_TARGETS` at your LAN subnet to see real
 findings.
@@ -164,8 +165,9 @@ and FIRST EPSS API, and cache results in the `cves` table. Note NVD rate limits
   it are rejected at creation *and* re-checked inside the worker.
 - **Blocklist**: `169.254.169.254`, `0.0.0.0/8`, CGNAT, multicast, reserved
   ranges are always denied — SSRF-style protection against internal metadata.
-- **Auth**: JWT (`python-jose`), OAuth2 password flow at `/api/token`;
-  all routes except `/health` and `/api/token` require a bearer token.
+- **Open access (demo)**: the dashboard opens directly with no login screen;
+  every action is recorded in the audit log as `guest`. JWT auth was removed
+  from the demo build (see `backend/app/api/` history to restore it).
 - **Rate limiting**: per-user sliding window on scan creation
   (`RATE_LIMIT_SCANS_PER_MINUTE`).
 - **Audit logging**: every target/scan action is written to the `audit_logs`
@@ -177,9 +179,9 @@ and FIRST EPSS API, and cache results in the `cves` table. Note NVD rate limits
 
 ```bash
 pip install -r backend/requirements.txt
-pytest -q        # 74 tests: scanner, service detection, version normalizer,
+pytest -q        # tests: scanner, service detection, version normalizer,
                  # CPE mapper, matcher/risk scoring, NVD/KEV/EPSS clients,
-                 # API/auth/allowlist, and end-to-end scan service flow
+                 # API/allowlist/rate limiting, and end-to-end scan flow
 ```
 
 CI (`.github/workflows/main.yml`) runs `ruff` on `backend/ scanner/ matcher/`,
@@ -189,7 +191,6 @@ CI (`.github/workflows/main.yml`) runs `ruff` on `backend/ scanner/ matcher/`,
 
 | Method | Path | Description |
 | --- | --- | --- |
-| POST | `/api/token` | Login → JWT |
 | POST | `/api/targets` | Add an allowed target |
 | GET | `/api/targets` | List targets (paged) |
 | POST | `/api/scans` | Queue a scan |

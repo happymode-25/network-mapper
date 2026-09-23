@@ -10,7 +10,6 @@ from ..database import get_db
 from ..models import Asset, Target
 from ..schemas import TargetCreate, TargetOut, TargetPage
 from ..security import is_allowed, log_audit
-from .deps import get_current_user
 
 router = APIRouter(prefix="/api/targets", tags=["targets"])
 
@@ -31,13 +30,12 @@ def _validate_ip(raw: str) -> str:
 def create_target(
     payload: TargetCreate,
     db: Session = Depends(get_db),
-    username: str = Depends(get_current_user),
 ):
     """Add a target. Rejected unless the IP is on the ALLOWED_TARGETS allowlist."""
     ip = _validate_ip(payload.ip)
     if not is_allowed(ip):
         log_audit(
-            username,
+            "guest",
             "target.create",
             target=ip,
             status="denied",
@@ -65,7 +63,7 @@ def create_target(
     db.add(target)
     db.commit()
     db.refresh(target)
-    log_audit(username, "target.create", target=ip)
+    log_audit("guest", "target.create", target=ip)
     return target
 
 
@@ -74,7 +72,6 @@ def list_targets(
     page: int = 1,
     size: int = 20,
     db: Session = Depends(get_db),
-    username: str = Depends(get_current_user),
 ):
     """List targets with pagination."""
     page = max(1, page)
@@ -90,7 +87,6 @@ def list_targets(
 def get_target(
     target_id: int,
     db: Session = Depends(get_db),
-    username: str = Depends(get_current_user),
 ):
     target = db.get(Target, target_id)
     if target is None:

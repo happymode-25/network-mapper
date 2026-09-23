@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session
 from ..database import get_db
 from ..models import Asset
 from ..schemas import AssetCreate, AssetOut, AssetPage, AssetUpdate
-from .deps import get_current_user
 
 router = APIRouter(prefix="/api/assets", tags=["assets"])
 
@@ -18,7 +17,6 @@ VALID_IMPORTANCE = {"none", "low", "medium", "high", "critical"}
 def create_asset(
     payload: AssetCreate,
     db: Session = Depends(get_db),
-    username: str = Depends(get_current_user),
 ):
     if payload.importance.lower() not in VALID_IMPORTANCE:
         raise HTTPException(status_code=422, detail="Invalid importance value")
@@ -40,7 +38,6 @@ def list_assets(
     page: int = 1,
     size: int = 20,
     db: Session = Depends(get_db),
-    username: str = Depends(get_current_user),
 ):
     page = max(1, page)
     size = min(100, max(1, size))
@@ -56,7 +53,6 @@ def update_asset(
     asset_id: int,
     payload: AssetUpdate,
     db: Session = Depends(get_db),
-    username: str = Depends(get_current_user),
 ):
     asset = db.get(Asset, asset_id)
     if asset is None:

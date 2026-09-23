@@ -43,15 +43,3 @@ def client(monkeypatch):
     )
     with TestClient(app) as test_client:
         yield test_client
-
-
-@pytest.fixture()
-def auth_headers(client):
-    """Authenticate as the default admin and return bearer headers."""
-    resp = client.post(
-        "/api/token",
-        data={"username": "admin", "password": "admin"},
-    )
-    assert resp.status_code == 200, resp.text
-    token = resp.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}

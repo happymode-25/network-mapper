@@ -83,7 +83,7 @@ in intent and strictly defensive.
 | Testing       | pytest, pytest-asyncio, respx (HTTP mocking), ruff (linting)        |
 
 Key libraries: `fastapi`, `sqlalchemy`, `alembic`, `celery`, `pydantic-settings`,
-`httpx`, `python-jose` (JWT), `passlib[bcrypt]`, `packaging`, `asyncio`, and `ipaddress`
+`httpx`, `packaging`, `asyncio`, and `ipaddress`
 (full list in `backend/requirements.txt`).
 
 ---
@@ -197,7 +197,6 @@ AuditLog (every target/scan action)
 
 | Method | Path                          | Description                                    |
 | ------ | ----------------------------- | ---------------------------------------------- |
-| POST   | `/api/token`                  | Login → JWT                                    |
 | POST   | `/api/targets`                | Add an allowed target                          |
 | GET    | `/api/targets`                | List targets (paged)                           |
 | POST   | `/api/scans`                  | Queue a scan (supports `ports_to_scan`)        |
@@ -214,9 +213,10 @@ AuditLog (every target/scan action)
   re-checked inside the worker.
 - **Blocklist** — `169.254.169.254` (cloud metadata), `0.0.0.0/8`, CGNAT, multicast,
   and reserved ranges are always denied (SSRF-style protection).
-- **Authentication** — JWT (HMAC-SHA256 via `python-jose`) issued at `/api/token`;
-  all routes except `/health` and `/api/token` require a bearer token. Passwords are
-  hashed with bcrypt.
+- **Open-access demo** — the hosted dashboard opens directly with no login screen
+  (credential authentication was removed so the project can be presented
+  instantly); every target/scan action is still recorded in the audit log as
+  `guest`. JWT auth can be restored from the project history if required.
 - **Rate limiting** — per-user sliding window on scan creation.
 - **Audit logging** — every target/scan action is recorded in the `audit_logs` table
   and an append-only JSONL file.
@@ -244,7 +244,7 @@ client, and Tailwind CSS for a responsive dark-theme UI.
 
 ## 5. Testing
 
-The project is covered by 85 test functions across eight modules:
+The project is covered by 91 test functions across eight modules:
 
 | Module                | Focus                                              |
 | --------------------- | -------------------------------------------------- |
@@ -255,7 +255,7 @@ The project is covered by 85 test functions across eight modules:
 | `test_matcher`        | CVE matching, confidence, risk scoring             |
 | `test_clients`        | NVD / KEV / EPSS client behavior (mocked HTTP via respx) |
 | `test_export`         | JSON / CSV / STIX export generation                |
-| `test_api`            | API, auth, allowlist, rate limiting, E2E scan flow |
+| `test_api`            | API, allowlist, rate limiting, E2E scan flow |
 
 Run with:
 
@@ -291,7 +291,8 @@ After running a scan against a target on the allowlist, the platform reports:
   range inference is heuristic, and banners that lie about versions can cause false
   positives.
 - `epss`/`kev` values in sample mode are illustrative, not live.
-- Single-admin authentication (no multi-user / RBAC yet).
+- No login screen in the hosted demo — open access so it can be presented
+  instantly (multi-user/RBAC is future work).
 
 ---
 
@@ -336,13 +337,13 @@ $env:ALLOWED_TARGETS="127.0.0.1, 192.168.0.0/16, 172.16.0.0/12, 10.0.0.0/8"
 uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000/docs, log in with `admin` / `admin`, add a target from
-the allowlist, and run a scan. Results are saved immediately.
+Open http://127.0.0.1:8000/docs — the app opens directly with no login — add a
+target from the allowlist, and run a scan. Results are saved immediately.
 
 ## Appendix B — How to Run (Docker)
 
 ```bash
-cp .env.example .env       # edit ALLOWED_TARGETS / credentials first
+cp .env.example .env       # edit ALLOWED_TARGETS / scanning controls first
 docker compose up --build
 docker compose exec backend python -m backend.app.seed
 ```
