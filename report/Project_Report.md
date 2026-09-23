@@ -3,7 +3,7 @@
 ## Automated Network Service Discovery and Vulnerability Assessment Platform
 
 **Course / Subject:** Networking and Cybersecurity Project
-**Student Name:** _________________________________
+**Student Name:** Girish
 **Student ID:** _________________________________
 **Date of Submission:** _________________________________
 
